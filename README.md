@@ -25,3 +25,21 @@ Once you ve uploaded the resources, make sure the ID of the resource is same as 
 Note: The results of each solution (either videos or spreadsheet are accompanied with docs. 
 
 YOU CAN REPRODUCE THE RESULTS. 
+
+
+2. SEated assessment based on video frames: 
+
+Code for this solution: 
+https://colab.research.google.com/drive/1UsWiGpAVA_NO7Xxv7He3AuHUx609ZsU9?usp=sharing 
+
+We got Videos from: https://www.istockphoto.com/ 
+
+Converted videos to mp4 format and adjusted resolution to have better results. 
+
+Corrected code to take into account angle from where we are taking the videos. 
+
+Tested the code with 5 videos of different durations, angles and visibility levels. 
+
+For speed processing and robust processing video frames should exceed 20MB.
+
+After Running the code You will the videos (original, converted, and results included) in this Drive Link: 
