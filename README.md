@@ -43,3 +43,10 @@ Tested the code with 5 videos of different durations, angles and visibility leve
 For speed processing and robust processing video frames should exceed 20MB.
 
 After Running the code You will the videos (original, converted, and results included) in this Drive Link: 
+
+
+
+
+
+
+I ADDED COMMENTS AS MUCH AS POSSIBLE TO MAKE THE CODE MORE CLEAR ...
