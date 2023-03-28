@@ -1,0 +1,322 @@
+Images processing and splitting: 
+Training data : over 600 images from : 
+Testing data : 50 images (with Dr. Armia’s score for validation : reference). 
+
+Step 1: dowload picture link above. 
+Step 2: filer the images, here comes a really problematic thing, I noticed that there are images such as (see link) : 
+Step 3: Convert all png files to jpg files. 
+
+
+
+
+1. First Version: 
+Code : 
+https://colab.research.google.com/drive/1VJWZgVlMg0oHpgV6gptGl2Rorjd5IUtc?usp=sharing
+Code Visualization: 
+********************************************************************************************************************************
+!pip install mediapipe
+
+import math
+import cv2
+import numpy as np
+from time import time
+import mediapipe as mp 
+import matplotlib.pyplot as plt
+
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.3, model_complexity=2)
+mp_drawing = mp.solutions.drawing_utils
+
+from google.colab import files
+from IPython.display import Image
+uploaded = files.upload()
+
+sample_img = cv2.imread('Picture35.png')
+plt.figure(figsize = [10, 10])
+plt.title("Sample Image");plt.axis('off');plt.imshow(sample_img[:,:,::-1]);plt.show()
+
+results = pose.process(cv2.cvtColor(sample_img, cv2.COLOR_BGR2RGB))
+if results.pose_landmarks:
+
+    for i in range(33):
+        print(f'{mp_pose.PoseLandmark(i).name}:\n{results.pose_landmarks.landmark[mp_pose.PoseLandmark(i).value]}')
+
+import csv
+
+# assume you have a list of landmarks stored in the variable 'landmarks'
+# each landmark is a tuple of (x, y, z) coordinates
+# for example: landmarks = [(x1, y1, z1), (x2, y2, z2), ...]
+
+# open a CSV file for writing
+with open('landmarks.xlsx', mode='w') as file:
+
+    # create a CSV writer object
+    writer = csv.writer(file, delimiter=',')
+
+    # write the header row
+    writer.writerow(['x', 'y', 'z'])
+
+    # write the landmark coordinates to the file
+    results = pose.process(cv2.cvtColor(sample_img, cv2.COLOR_BGR2RGB))
+    if results.pose_landmarks:
+
+      for i in range(32):
+        writer.writerow(f'{mp_pose.PoseLandmark(i).name}:\n{results.pose_landmarks.landmark[mp_pose.PoseLandmark(i).value]}')
+
+image_height, image_width, _ = sample_img.shape
+
+if results.pose_landmarks:
+    for i in range(33):
+
+        print(f'{mp_pose.PoseLandmark(i).name}:') 
+        print(f'x: {results.pose_landmarks.landmark[mp_pose.PoseLandmark(i).value].x * image_width}')
+        print(f'y: {results.pose_landmarks.landmark[mp_pose.PoseLandmark(i).value].y * image_height}')
+        print(f'z: {results.pose_landmarks.landmark[mp_pose.PoseLandmark(i).value].z * image_width}')
+        print(f'visibility: {results.pose_landmarks.landmark[mp_pose.PoseLandmark(i).value].visibility}\n')
+
+img_copy = sample_img.copy()
+if results.pose_landmarks:
+
+    mp_drawing.draw_landmarks(image=img_copy, landmark_list=results.pose_landmarks, connections=mp_pose.POSE_CONNECTIONS)
+
+    fig = plt.figure(figsize = [10, 10])
+    plt.title("Output");plt.axis('off');plt.imshow(img_copy[:,:,::-1]);plt.show()
+
+mp_drawing.plot_landmarks(results.pose_world_landmarks, mp_pose.POSE_CONNECTIONS)
+
+def calculateAngle(landmark1, landmark2, landmark3):
+    '''
+    This function calculates angle between three different landmarks.
+    Args:
+        landmark1: The first landmark containing the x,y and z coordinates....
+        landmark2: The second landmark containing the x,y and z coordinates....
+        landmark3: The third landmark containing the x,y and z coordinates....
+    Returns:
+        angle: The calculated angle between the three landmarks.
+    We will be using this function in order to add angles on the results given by distances 
+    '''
+
+    x1, y1, _ = landmark1
+    x2, y2, _ = landmark2
+    x3, y3, _ = landmark3
+    angle = math.degrees(math.atan2(y3 - y2, x3 - x2) - math.atan2(y1 - y2, x1 - x2))
+    if angle < 0:
+        angle += 360
+    return angle
+
+def detectPose(image, pose, display=True):
+
+    output_image = image.copy()
+
+    imageRGB = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    results = pose.process(imageRGB)
+    height, width, _ = image.shape
+
+    landmarks = []
+
+    if results.pose_landmarks:
+
+        mp_drawing.draw_landmarks(image=output_image, landmark_list=results.pose_landmarks,
+                                  connections=mp_pose.POSE_CONNECTIONS)
+        for landmark in results.pose_landmarks.landmark:
+ 
+            landmarks.append((int(landmark.x * width), int(landmark.y * height),
+                                  (landmark.z * width)))
+
+    if display:
+
+        plt.figure(figsize=[22,22])
+        plt.subplot(121);plt.imshow(image[:,:,::-1]);plt.title("Original Image");plt.axis('off');
+        plt.subplot(122);plt.imshow(output_image[:,:,::-1]);plt.title("Output Image");plt.axis('off');
+
+        mp_drawing.plot_landmarks(results.pose_world_landmarks, mp_pose.POSE_CONNECTIONS)
+
+    else:
+
+        return output_image, landmarks
+
+image = cv2.imread('Picture35.png')
+output_image, landmarks = detectPose(image, pose, display=False)
+#Elbow: 
+left_elbow_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value])
+right_elbow_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value],
+                                       landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value],
+                                       landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value])  
+#Shoulder  
+left_shoulder_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value],
+                                         landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value],
+                                         landmarks[mp_pose.PoseLandmark.LEFT_HIP.value])
+right_shoulder_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value],
+                                          landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value],
+                                          landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value])
+#Knee
+left_knee_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_HIP.value],
+                                     landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value],
+                                     landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value])
+right_knee_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value])
+#Foot
+right_foot_angle_FMA = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_FOOT_INDEX.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value])
+
+left_foot_angle_FMA = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_FOOT_INDEX.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value])
+
+#hip
+
+right_hip_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value])
+
+
+left_hip_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_HIP.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value])
+
+#wrist
+right_wrist_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_INDEX.value])
+
+left_wrist_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_INDEX.value])
+
+#head
+right_head_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_EAR.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value])
+
+left_head_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_EAR.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value])
+
+
+print(f'{left_foot_angle_FMA}')  
+print(f'{right_foot_angle_FMA}')
+print(f'{left_knee_angle}')
+print(f'{right_knee_angle}')
+print(f'{left_hip_angle}')
+print(f'{right_hip_angle}')
+print(f'{left_shoulder_angle}')
+print(f'{right_shoulder_angle}')
+print(f'{left_elbow_angle}')
+print(f'{right_elbow_angle}')
+print(f'{left_wrist_angle}')
+print(f'{right_wrist_angle}')
+print(f'{left_head_angle}')
+print(f'{right_head_angle}')
+
+def classifyPose(landmarks, output_image, display=True):
+    """
+    This function classifies standing still (ful body) poses depending upon the angles of various body joints.
+    Args:
+        landmarks: A list of detected landmarks of the person whose pose needs to be classified which are of number 32
+        output_image: A image of the person with the detected pose landmarks drawn
+        display: A boolean value that is if set to true the function displays the resultant image with the pose label 
+        written on it and returns nothing.
+    Returns:
+        output_image: The image with the detected pose landmarks drawn and pose label written.
+        label: The classified pose label of the person in the output_image
+        Accuarcy of the posture analysis (multi-categorical Classification task representing hypomibility)-->Every category is a primary indicative for going from one level of treatment to another.....
+        Class 1: Normal (scale 0)
+        Class 2: Minimal (Scale 1)
+        Class 3: Moderate (Scale 2)
+        Class 4: Significant (Scale 3)
+        Class 5: Immobile (Scale 4)
+ 
+    """
+
+    label = 'Bad posture'
+ 
+    # Specify the color (Red) with which the label will be written on the image.
+    color = (0, 0, 255)
+    
+    # Calculate the required angles using the "calculateAngle" function we already defined (diving the body into three part)
+    #Upper part
+    # Get the angle between the left shoulder, elbow and wrist points. 
+    left_elbow_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value],
+                                      landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value])
+    
+    # Get the angle between the right shoulder, elbow and wrist points. 
+    right_elbow_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value],
+                                       landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value],
+                                       landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value])   
+    
+    #Middle part
+    # Get the angle between the left elbow, shoulder and hip points. 
+    left_shoulder_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value],
+                                         landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value],
+                                         landmarks[mp_pose.PoseLandmark.LEFT_HIP.value])
+    
+    # Get the angle between the right hip, shoulder and elbow points. 
+    right_shoulder_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value],
+                                          landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value],
+                                          landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value])
+    
+    #Low part
+    # Get the angle between the left hip, knee and ankle points. 
+    left_knee_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.LEFT_HIP.value],
+                                     landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value],
+                                     landmarks[mp_pose.PoseLandmark.LEFT_ANKLE.value])
+    
+    # Get the angle between the right hip, knee and ankle points 
+    right_knee_angle = calculateAngle(landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_KNEE.value],
+                                      landmarks[mp_pose.PoseLandmark.RIGHT_ANKLE.value])
+    
+   
+    # As for both of them, both arms should be straight and shoulders should be at the specific angle.
+    #First check 
+    # Check if the both arms are straight.""
+
+    if left_elbow_angle > 195 and left_elbow_angle < 165 and right_elbow_angle > 170 and right_elbow_angle < 165:
+ 
+        if left_shoulder_angle > 15 and left_shoulder_angle < 25 and right_shoulder_angle > 15 and right_shoulder_angle < 25:
+ 
+            if left_knee_angle > 165 and left_knee_angle < 195 and right_knee_angle > 165 and right_knee_angle < 195:
+                label = 'Good posture'
+ 
+    if label != 'Bad posture':
+        color = (0, 255, 0)  
+
+    cv2.putText(output_image, label, (10, 30),cv2.FONT_HERSHEY_PLAIN, 2, color, 2)
+
+    if display:
+
+        plt.figure(figsize=[10,10])
+        plt.imshow(output_image[:,:,::-1]);plt.title("Output Image");plt.axis('off');
+        
+    else:
+
+        return output_image, label
+
+# Read a sample image and perform pose classification on it.
+image = cv2.imread('Picture1.png')
+output_image, landmarks = detectPose(image, pose, display=False)
+if landmarks:
+    classifyPose(landmarks, output_image, display=True)
+    
+**********************************************************************************************************
+Used resources: https://drive.google.com/drive/folders/1UCeoxSmmm7CslrgpKquCVKtiJZDZeJ-z?usp=sharing 
+
+Results: 
+spreadsheet that contains results after running of : 
+Landmarks before normalization 
+Landmarks corrdinates after normalization
+A photo of the person of course a standing still position
+Parts of the body taken into account
+Calculated angles using our version
+Corresponding scores from Dr.Armia’s assessment. 
+Pictures of landmarks in a 3 dimensional orientations.
+File: https://docs.google.com/spreadsheets/d/1KW78wckjBiyydwk1ba1V4wc9LHsNEl7LF9o1g2vKXoU/edit?usp=sharing
+
+A collected dataset where only labels of body parts, angles and scores are taken into account: 
+File: https://docs.google.com/spreadsheets/d/1x-3Gzz8N1FMAonPvr5fjgSGiQlA-fobvylyuczHZ0X0/edit?usp=sharing
