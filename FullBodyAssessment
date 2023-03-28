@@ -320,3 +320,130 @@ File: https://docs.google.com/spreadsheets/d/1KW78wckjBiyydwk1ba1V4wc9LHsNEl7LF9
 
 A collected dataset where only labels of body parts, angles and scores are taken into account: 
 File: https://docs.google.com/spreadsheets/d/1x-3Gzz8N1FMAonPvr5fjgSGiQlA-fobvylyuczHZ0X0/edit?usp=sharing
+
+
+2. Advanced Version: 
+Implementation: 
+Code: https://colab.research.google.com/drive/1eMlJFjIB9WFr59GZjXgDKlGTHLQio964?usp=sharing 
+
+Resources: https://drive.google.com/drive/folders/1trNbzPiRSf8WV0L1QpFgHVMMbIY0UJbz?usp=sharing 
+
+
+Testing: NOTE THAT ALL PICTURES ARE SELECTED RANDOMLY 
+Training with 100 pictures, testing with 50 pictures: 
+Execution time: 50 seconds
+
+Training with 300 pictures, testing with 50 pictures(these are always the  same pictures which are already assessed by Dr.Armia) 
+Execution time: 1 min 33seconds
+
+Training with 488 Images and testing with 50 Images 
+Execution time: 3minutes 57 seconds
+Results: https://docs.google.com/spreadsheets/d/1x-3Gzz8N1FMAonPvr5fjgSGiQlA-fobvylyuczHZ0X0/edit?usp=sharing
+
+********************************************************
+
+Original file is located at
+    https://colab.research.google.com/drive/1eMlJFjIB9WFr59GZjXgDKlGTHLQio964
+"""
+
+!pip install mediapipe
+
+import cv2
+import mediapipe as mp
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score
+import os
+
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
+pose_detection = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
+def calculate_angles(image):
+    
+    pose_detection = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    results = pose_detection.process(image)
+
+    joint_positions = []
+    for landmark in results.pose_landmarks.landmark:
+        joint_positions.append([landmark.x, landmark.y, landmark.z])
+
+    angle_1 = calculate_angle(joint_positions[mp_pose.PoseLandmark.LEFT_SHOULDER.value], joint_positions[mp_pose.PoseLandmark.LEFT_ELBOW.value], joint_positions[mp_pose.PoseLandmark.LEFT_WRIST.value])
+    angle_2 = calculate_angle(joint_positions[mp_pose.PoseLandmark.RIGHT_SHOULDER.value], joint_positions[mp_pose.PoseLandmark.RIGHT_ELBOW.value], joint_positions[mp_pose.PoseLandmark.RIGHT_WRIST.value])
+    angle_3 = calculate_angle(joint_positions[mp_pose.PoseLandmark.LEFT_HIP.value], joint_positions[mp_pose.PoseLandmark.LEFT_KNEE.value], joint_positions[mp_pose.PoseLandmark.LEFT_ANKLE.value])
+    angle_4 = calculate_angle(joint_positions[mp_pose.PoseLandmark.RIGHT_HIP.value], joint_positions[mp_pose.PoseLandmark.RIGHT_KNEE.value], joint_positions[mp_pose.PoseLandmark.RIGHT_ANKLE.value])
+    
+    return angle_1, angle_2, angle_3, angle_4
+
+def calculate_angle(joint1, joint2, joint3):
+   
+    vec1 = np.array([joint2[0] - joint1[0], joint2[1] - joint1[1], joint2[2] - joint1[2]])
+    vec2 = np.array([joint2[0] - joint3[0], joint2[1] - joint3[1], joint2[2] - joint3[2]])
+    cosine_angle = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    angle = np.degrees(np.arccos(cosine_angle))
+    return angle
+
+def get_risk_of_injury(angle_1, angle_2, angle_3, angle_4):
+    
+    risk = 0
+    if angle_1 > 170 or angle_2 > 170:
+        risk += 1
+    if angle_3 < 150 or angle_4 < 150:
+        risk += 1
+    if angle_1 > 170 and angle_2 > 170:
+        risk += 1
+    if angle_3 < 130 or angle_4 < 130:
+        risk += 1
+    if angle_1 > 170 and angle_2 > 170 and angle_3 < 130 and angle_4 < 130:
+        risk += 1
+    return risk
+
+images = []
+angles = []
+risks = []
+
+
+for i in range(1, 20):
+    img = cv2.imread(f"Picture{i}.jpg")
+    images.append(img)
+    angle_1, angle_2, angle_3, angle_4 = calculate_angles(img)
+    angles.append([angle_1, angle_2, angle_3, angle_4])
+    risks.append(get_risk_of_injury(angle_1, angle_2, angle_3, angle_4))
+
+angles = np.array(angles)
+risks = np.array(risks)
+
+scaler = StandardScaler()
+angles = scaler.fit_transform(angles)
+
+X_train, X_val, y_train, y_val = train_test_split(angles, risks, test_size=0.2, random_state=42)
+
+logistic_model = LogisticRegression(random_state=42)
+logistic_model.fit(X_train, y_train)
+
+tree_model = DecisionTreeClassifier(random_state=42)
+tree_model.fit(X_train, y_train)
+
+y_pred_logistic = logistic_model.predict(X_val)
+acc_logistic = accuracy_score(y_val, y_pred_logistic)
+print("Logistic regression accuracy:", acc_logistic)
+
+y_pred_tree = tree_model.predict(X_val)
+acc_tree = accuracy_score(y_val, y_pred_tree)
+print("Decision tree accuracy:", acc_tree)
+
+new_image = cv2.imread("Picture32.jpg")
+new_angle_1, new_angle_2, new_angle_3, new_angle_4 = calculate_angles(new_image)
+new_angles = np.array([[new_angle_1, new_angle_2, new_angle_3, new_angle_4]])
+new_angles = scaler.transform(new_angles)
+risk_of_injury = logistic_model.predict(new_angles)[0]
+print("Risk of injury:", risk_of_injury)
+
+***********************************************************
+
